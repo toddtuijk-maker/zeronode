@@ -65,6 +65,11 @@ cmd_remove(){
   proto_dispatch remove "$target"
 }
 
+cmd_uninstall(){
+  source "$ZN_ROOT/lib/uninstall.sh"
+  zn_uninstall_all
+}
+
 cmd_env(){
   source "$ZN_ROOT/lib/envcheck.sh"
   source "$ZN_ROOT/lib/policy.sh"
@@ -218,6 +223,7 @@ ZeroNode CLI (零号节点管理平台)
   zn restart <proto|all>            重启
   zn stop <proto|all>               停止
   zn remove <proto>                 卸载协议（切换内核前先卸载旧内核）
+  zn uninstall                      一键卸载全部组件与数据
   zn env [security|speed|compat]    环境检测报告
   zn config list <proto>            配置版本历史
   zn config rollback <proto> [ver]  回滚配置
@@ -244,6 +250,7 @@ case "$cmd" in
   restart)  cmd_restart "$@" ;;
   stop)     cmd_stop "$@" ;;
   remove)   cmd_remove "$@" ;;
+  uninstall) cmd_uninstall "$@" ;;
   env)      cmd_env "$@" ;;
   config)   cmd_config "$@" ;;
   rotate)   cmd_rotate "$@" ;;

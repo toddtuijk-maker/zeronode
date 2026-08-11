@@ -62,6 +62,7 @@ wget -N https://raw.githubusercontent.com/toddtuijk-maker/zeronode/main/install.
  6. 显示全部链接 / 二维码 / 订阅
  7. 环境检测报告
  8. 管理入口
+ 10. 一键卸载（全部组件与数据）
 ```
 
 所有参数（端口 / UUID / 密码 / 伪装网站）直接回车即为随机生成；REALITY 目标站与伪装网站从可信清单中随机稳定选取，也可自定义。
@@ -111,6 +112,21 @@ docker run -d --name zeronode \
 ```
 
 容器内管理：`docker exec -it zeronode zn links`、`docker exec zeronode zn status` 等。
+
+## 一键卸载
+
+三种方式任选：
+
+```bash
+# 方式一：独立卸载脚本（无需先安装）
+wget -N https://raw.githubusercontent.com/toddtuijk-maker/zeronode/main/uninstall.sh && bash uninstall.sh
+
+# 方式二：安装菜单选「10. 一键卸载」
+# 方式三：已安装环境
+zn uninstall
+```
+
+卸载前会询问是否备份；备份保留在 `/var/lib/zeronode/backups/`（若选择保留数据目录）。
 
 ---
 

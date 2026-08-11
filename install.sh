@@ -16,6 +16,9 @@ export ZN_BRANCH="${ZN_BRANCH:-main}"
 
 SOURCE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
+# 任何步骤失败都给出明确位置与日志，避免“静默退出”
+trap 'echo "[ZeroNode] 安装/管理过程发生错误，已中止（脚本第 $LINENO 行）。"; echo "最近日志: /var/lib/zeronode/logs/zeronode.log"; tail -n 20 /var/lib/zeronode/logs/zeronode.log 2>/dev/null || true' ERR
+
 # ---------- 引导：判断是完整项目目录还是单文件 ----------
 zn_has_full_tree(){
   [[ -f "$SOURCE_DIR/lib/common.sh" ]] \
@@ -27,18 +30,19 @@ zn_has_full_tree(){
 # 只复制项目文件（绝不整目录拷贝，避免把 /root 下的 .ssh 等无关内容带进去）
 zn_install_tree(){
   local src="$1" dst="$2" f
+  [[ "$dst" == /* ]] || { echo "错误: 安装目录必须是绝对路径: $dst"; return 1; }
   mkdir -p "$dst"
   if [[ "$dst" == "/opt/zeronode" ]]; then
     # 默认专用安装目录：整体清空，避免此前失败安装/误拷贝残留的脏文件
-    rm -rf "$dst"/{*,.[!.]*} 2>/dev/null || true
+    rm -rf "${dst:?}"/{*,.[!.]*} 2>/dev/null || true
     mkdir -p "$dst"
   else
     # 自定义目录：只清理已知项目子目录，保留用户其他内容
     for d in bin lib protocols vendor docs tests docker api .github; do
-      [[ -e "$dst/$d" ]] && rm -rf "$dst/$d"
+      [[ -e "$dst/$d" ]] && rm -rf "${dst:?}/$d"
     done
   fi
-  for f in install.sh README.md LICENSE CHANGELOG.md .gitignore; do
+  for f in install.sh uninstall.sh README.md LICENSE CHANGELOG.md .gitignore; do
     [[ -f "$src/$f" ]] && cp -a "$src/$f" "$dst/"
   done
   for d in bin lib protocols vendor docs tests docker api; do
@@ -110,14 +114,18 @@ source "$ZN_ROOT/lib/credential.sh"
 source "$ZN_ROOT/lib/db.sh"
 source "$ZN_ROOT/lib/ui.sh"
 source "$ZN_ROOT/lib/policy.sh"
+source "$ZN_ROOT/lib/uninstall.sh"
 
 [[ "$(id -u)" -eq 0 ]] || zn_die "需要 root 权限运行"
 zn_state_init
 cred_init
-db_init
+db_init || true
 zn_log_rotate
 
 # 兼容常见 Linux：包名按发行版映射（sqlite3→sqlite on RHEL 系等）
+# 先刷新软件源，避免新系统 apt 列表缺失导致装依赖失败
+source "$ZN_ROOT/lib/system.sh"
+system_update
 for c in curl openssl sqlite3 qrencode socat; do
   zn_need_cmd_or_install "$c" "$c"
 done
@@ -182,6 +190,10 @@ deploy_flow(){
   fi
 }
 
+uninstall_flow(){
+  zn_uninstall_all
+}
+
 menu_single(){
   ui_title "选择要安装的协议（IP 一键，无需域名）"
   ui_item "1" "Hysteria 2 + TLS + obfs"
@@ -192,10 +204,10 @@ menu_single(){
   local ans
   read -rp "请输入选项: " ans || return 1
   case "$ans" in
-    1) deploy_flow security hysteria2 ;;
-    2) deploy_flow security vision ;;
-    3) deploy_flow security xhttp ;;
-    4) deploy_flow compat trojan ;;
+    1) deploy_flow security hysteria2 || true ;;
+    2) deploy_flow security vision || true ;;
+    3) deploy_flow security xhttp || true ;;
+    4) deploy_flow compat trojan || true ;;
     *) return 0 ;;
   esac
 }
@@ -228,28 +240,30 @@ menu(){
     ui_item "7" "环境检测报告"
     ui_item "8" "管理入口（配置回滚 / 轮换 / 备份 / 升级 / API）"
     ui_item "9" "切换 VLESS 内核（当前: $(cred_get deploy.kernel 2>/dev/null || echo singbox)）"
+    ui_item "10" "一键卸载（全部组件与数据）"
     ui_item "0" "退出"
     ui_hr
     local ans
-    read -rp "请输入选项 [0-9]: " ans || exit 1
+    read -rp "请输入选项 [0-10]: " ans || exit 1
     case "$ans" in
-      1) deploy_flow security batch ;;
+      1) deploy_flow security batch || true ;;
       2)
         local domain
         read -rp "请输入你的域名（用于 Hysteria2 正式证书）: " domain || continue
         if zn_valid_domain "$domain"; then
-          deploy_flow security batch "$domain"
+          deploy_flow security batch "$domain" || true
         else
           zn_red "域名格式不正确"
         fi
         ;;
-      3) deploy_flow speed batch ;;
-      4) deploy_flow compat batch ;;
-      5) menu_single ;;
-      6) ui_show_links ;;
+      3) deploy_flow speed batch || true ;;
+      4) deploy_flow compat batch || true ;;
+      5) menu_single || true ;;
+      6) ui_show_links || true ;;
       7) source "$ZN_ROOT/lib/envcheck.sh"; envcheck_run security ;;
       8) zn_yellow "请使用命令: zn help（例如 zn status / zn config rollback / zn rotate / zn backup / zn upgrade / zn api install）";;
       9) choose_kernel ;;
+      10) uninstall_flow || true ;;
       0) exit 0 ;;
       *) zn_red "无效选项" ;;
     esac
