@@ -29,6 +29,11 @@ test_common_run(){
   local pwd
   pwd="$(zn_random_password 16)"
   t_assert_eq "随机密码长度 16" "16" "${#pwd}"
+  t_assert "随机密码通过强度校验" zn_valid_password "$pwd"
+  t_assert "密码校验通过(含特殊字符)" zn_valid_password "Abcd1234!@%^*()_+=.,;"
+  t_assert_eq "密码过短被拒" "1" "$(zn_valid_password 'short12'; echo $?)"
+  t_assert_eq "密码含空格被拒" "1" "$(zn_valid_password 'has space1'; echo $?)"
+  t_assert_eq "密码含#被拒" "1" "$(zn_valid_password 'bad#pass1'; echo $?)"
 
   local hex
   hex="$(zn_random_hex 8)"

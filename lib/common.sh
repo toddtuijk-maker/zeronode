@@ -145,6 +145,20 @@ zn_valid_port(){
   [[ "$p" =~ ^[0-9]+$ ]] && (( p >= 1 && p <= 65535 ))
 }
 
+# 密码强度/字符集校验（与 YAML/JSON/URL 安全字符集一致）
+zn_valid_password(){
+  local p="$1"
+  [[ ${#p} -ge 8 ]] || return 1
+  local allowed="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@%^*()_+=.,;-"
+  local c
+  local i
+  for ((i = 0; i < ${#p}; i++)); do
+    c="${p:i:1}"
+    [[ "$allowed" == *"$c"* ]] || return 1
+  done
+  return 0
+}
+
 zn_random_port(){
   if command -v shuf >/dev/null 2>&1; then
     shuf -i 2000-65535 -n 1

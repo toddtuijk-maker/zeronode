@@ -54,7 +54,7 @@ deploy_collect_params(){
     [[ -n "$pwd" ]] || {
       while true; do
         zn_prompt pwd "设置 Hysteria2 密码（回车随机，至少 8 位）" "$(zn_random_password 16)" || return 1
-        valid_password "$pwd" && break
+        zn_valid_password "$pwd" && break
         zn_red "密码需至少 8 位，且只能包含字母数字和 !@%^*()_-+=.,; 等字符"
       done
       cred_set "deploy.hysteria2.password" "$pwd"
@@ -64,7 +64,7 @@ deploy_collect_params(){
     [[ -n "$obfs" ]] || {
       while true; do
         zn_prompt obfs "设置 Hysteria2 obfs 密码（回车随机）" "$(zn_random_password 12)" || return 1
-        valid_password "$obfs" && break
+        zn_valid_password "$obfs" && break
         zn_red "obfs 密码需至少 8 位，且只能包含安全字符"
       done
       cred_set "deploy.hysteria2.obfs" "$obfs"
@@ -76,7 +76,7 @@ deploy_collect_params(){
     [[ -n "$tpwd" ]] || {
       while true; do
         zn_prompt tpwd "设置 Trojan 密码（回车随机）" "$(zn_random_password 20)" || return 1
-        valid_password "$tpwd" && break
+        zn_valid_password "$tpwd" && break
         zn_red "密码需至少 8 位，且只能包含安全字符"
       done
       cred_set "deploy.trojan.password" "$tpwd"
