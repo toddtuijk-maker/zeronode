@@ -28,10 +28,16 @@ zn_has_full_tree(){
 zn_install_tree(){
   local src="$1" dst="$2" f
   mkdir -p "$dst"
-  # 清理旧的项目子目录（仅限已知目录，避免残留脏文件）
-  for d in bin lib protocols vendor docs tests docker api .github; do
-    [[ -e "$dst/$d" ]] && rm -rf "$dst/$d"
-  done
+  if [[ "$dst" == "/opt/zeronode" ]]; then
+    # 默认专用安装目录：整体清空，避免此前失败安装/误拷贝残留的脏文件
+    rm -rf "$dst"/{*,.[!.]*} 2>/dev/null || true
+    mkdir -p "$dst"
+  else
+    # 自定义目录：只清理已知项目子目录，保留用户其他内容
+    for d in bin lib protocols vendor docs tests docker api .github; do
+      [[ -e "$dst/$d" ]] && rm -rf "$dst/$d"
+    done
+  fi
   for f in install.sh README.md LICENSE CHANGELOG.md .gitignore; do
     [[ -f "$src/$f" ]] && cp -a "$src/$f" "$dst/"
   done
