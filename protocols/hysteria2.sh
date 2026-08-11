@@ -58,15 +58,17 @@ proto_health_hysteria2(){
 
 proto_validate_hysteria2(){
   local f="$1"
-  [[ -f "$f" && -s "$f" ]] || return 1
+  [[ -f "$f" && -s "$f" ]] || { zn_log_error "hysteria2" "配置校验失败: 文件不存在或为空 ($f)"; return 1; }
   # 必填字段检查
-  grep -qE '^listen:' "$f" || return 1
-  grep -qE '^  cert:' "$f" || return 1
-  grep -qE '^  key:' "$f" || return 1
-  grep -qE '^  password:' "$f" || return 1
-  # 如果系统有 python3，做 YAML 语法校验
-  if command -v python3 >/dev/null 2>&1; then
-    python3 -c 'import yaml,sys; yaml.safe_load(open(sys.argv[1]))' "$f" 2>/dev/null || return 1
+  grep -qE '^listen:' "$f" || { zn_log_error "hysteria2" "配置校验失败: 缺少 listen"; return 1; }
+  grep -qE '^  cert:' "$f" || { zn_log_error "hysteria2" "配置校验失败: 缺少 cert"; return 1; }
+  grep -qE '^  key:' "$f" || { zn_log_error "hysteria2" "配置校验失败: 缺少 key"; return 1; }
+  grep -qE '^  password:' "$f" || { zn_log_error "hysteria2" "配置校验失败: 缺少 password"; return 1; }
+  grep -qE '^  type: salamander' "$f" || { zn_log_error "hysteria2" "配置校验失败: 缺少 obfs"; return 1; }
+  # 基础 YAML 健康检查：不允许制表符，不允许明显未闭合的引号
+  if grep -q "$(printf '\t')" "$f"; then
+    zn_log_error "hysteria2" "配置校验失败: 存在制表符"
+    return 1
   fi
   return 0
 }

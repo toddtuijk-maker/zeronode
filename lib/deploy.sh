@@ -17,7 +17,11 @@ deploy_collect_params(){
   local uuid
   uuid="$(cred_get deploy.uuid)"
   [[ -n "$uuid" ]] || {
-    zn_prompt uuid "设置用户 UUID（回车随机生成）" "$(zn_random_uuid)" || return 1
+    while true; do
+      zn_prompt uuid "设置用户 UUID（回车随机生成）" "$(zn_random_uuid)" || return 1
+      zn_valid_uuid "$uuid" && break
+      zn_red "UUID 格式不正确，请重新输入"
+    done
     cred_set "deploy.uuid" "$uuid"
     cred_set "xray.uuid" "$uuid"
   }
@@ -48,13 +52,21 @@ deploy_collect_params(){
   if [[ "$protos" == *hysteria2* ]]; then
     pwd="$(cred_get deploy.hysteria2.password)"
     [[ -n "$pwd" ]] || {
-      zn_prompt pwd "设置 Hysteria2 密码（回车随机）" "$(zn_random_password 16)" || return 1
+      while true; do
+        zn_prompt pwd "设置 Hysteria2 密码（回车随机，至少 8 位）" "$(zn_random_password 16)" || return 1
+        valid_password "$pwd" && break
+        zn_red "密码需至少 8 位，且只能包含字母数字和 !@%^*()_-+=.,; 等字符"
+      done
       cred_set "deploy.hysteria2.password" "$pwd"
     }
     local obfs
     obfs="$(cred_get deploy.hysteria2.obfs)"
     [[ -n "$obfs" ]] || {
-      zn_prompt obfs "设置 Hysteria2 obfs 密码（回车随机）" "$(zn_random_password 12)" || return 1
+      while true; do
+        zn_prompt obfs "设置 Hysteria2 obfs 密码（回车随机）" "$(zn_random_password 12)" || return 1
+        valid_password "$obfs" && break
+        zn_red "obfs 密码需至少 8 位，且只能包含安全字符"
+      done
       cred_set "deploy.hysteria2.obfs" "$obfs"
     }
   fi
@@ -62,7 +74,11 @@ deploy_collect_params(){
   if [[ "$subs" == *trojan* ]]; then
     tpwd="$(cred_get deploy.trojan.password)"
     [[ -n "$tpwd" ]] || {
-      zn_prompt tpwd "设置 Trojan 密码（回车随机）" "$(zn_random_password 20)" || return 1
+      while true; do
+        zn_prompt tpwd "设置 Trojan 密码（回车随机）" "$(zn_random_password 20)" || return 1
+        valid_password "$tpwd" && break
+        zn_red "密码需至少 8 位，且只能包含安全字符"
+      done
       cred_set "deploy.trojan.password" "$tpwd"
     }
   fi
