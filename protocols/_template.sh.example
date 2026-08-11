@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+#
+# _template.sh - 新协议模块模板
+# 复制为 protocols/<name>.sh 并实现以下函数即完成接入
+#
+
+# ---------- 元数据 ----------
+proto_meta_<name>_needs_domain(){ echo 0; }                 # 1=必须域名 0=IP 即可
+proto_meta_<name>_display_name(){ echo "新协议"; }
+proto_meta_<name>_transport(){ echo "tcp"; }
+proto_meta_<name>_systemd_unit(){ echo "<unit>"; }
+proto_meta_<name>_config_perms(){ echo 644; }
+proto_meta_<name>_config_owner(){ echo "root:root"; }
+proto_meta_<name>_deps(){ echo ""; }                        # 需随配置备份的文件
+
+proto_config_path_<name>(){ echo "/etc/<name>/config"; }
+proto_version_<name>(){ echo "unknown"; }
+
+# ---------- 生命周期 ----------
+proto_install_<name>(){      # 参数: mode(ip|domain) [domain]
+  zn_require_root
+  # 1. 安装内核（vendor 官方安装器 + 完整性校验）
+  # 2. 生成/读取凭证（lib/credential.sh）
+  # 3. 生成临时配置 → cm_apply <name> <tmp> "install"（自动备份/校验/回滚）
+  # 4. 防火墙放行、systemd enable、proto_mark_installed <name>
+  return 0
+}
+
+proto_remove_<name>(){
+  zn_require_root
+  zn_confirm "确认卸载 <name>？" || return 1
+  cm_backup <name>
+  systemctl stop "$(proto_meta_<name>_systemd_unit)" >/dev/null 2>&1 || true
+  rm -f /etc/systemd/system/<unit>
+  rm -rf /etc/<name>
+  systemctl daemon-reload >/dev/null 2>&1 || true
+  proto_mark_installed <name> 0
+}
+
+proto_restart_<name>(){
+  systemctl daemon-reload >/dev/null 2>&1 || true
+  systemctl enable "$(proto_meta_<name>_systemd_unit)" >/dev/null 2>&1 || true
+  systemctl restart "$(proto_meta_<name>_systemd_unit)"
+}
+
+proto_status_<name>(){
+  systemctl is-active "$(proto_meta_<name>_systemd_unit)" 2>/dev/null || echo inactive
+}
+
+proto_health_<name>(){
+  systemctl is-active "$(proto_meta_<name>_systemd_unit)" >/dev/null 2>&1
+}
+
+# ---------- 配置校验 ----------
+proto_validate_<name>(){
+  local f="$1"
+  [[ -f "$f" && -s "$f" ]] || return 1
+  return 0
+}
+
+# ---------- 客户端链接 ----------
+proto_links_<name>(){
+  source "$ZN_ROOT/lib/clientgen.sh"
+  # 输出 URI / sing-box / clash（调用 clientgen_* 系列）
+}
+
+# ---------- 轮换（可选） ----------
+proto_rotate_<name>(){
+  zn_require_root
+  source "$ZN_ROOT/lib/config_manager.sh"
+  # 生成新凭证 → 重新生成配置 → cm_apply <name> <tmp> "rotate"
+}

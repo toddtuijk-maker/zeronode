@@ -1,0 +1,23 @@
+# ZeroNode 生产容器（进程守护模式，无需 systemd）
+FROM debian:bookworm-slim
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+       bash curl openssl sqlite3 qrencode socat unzip ca-certificates iproute2 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY . /opt/zeronode
+WORKDIR /opt/zeronode
+
+RUN chmod +x install.sh bin/zn bin/zn-daemon docker/entrypoint.sh
+
+ENV ZN_ROOT=/opt/zeronode \
+    ZN_STATE=/var/lib/zeronode \
+    ZN_CONF=/etc/zeronode.conf
+
+VOLUME ["/var/lib/zeronode"]
+
+# 默认暴露常用端口（按实际部署使用 --network host 或按需 -p 映射）
+EXPOSE 443 8443 5678/udp 9443 8080 8081
+
+ENTRYPOINT ["/opt/zeronode/docker/entrypoint.sh"]

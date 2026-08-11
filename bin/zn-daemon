@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+#
+# zn-daemon - 监控/自愈守护进程 + API/订阅服务
+#
+
+export ZN_ROOT="${ZN_ROOT:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)}"
+export ZN_STATE="${ZN_STATE:-/var/lib/zeronode}"
+
+# shellcheck source=lib/common.sh
+source "$ZN_ROOT/lib/common.sh"
+# shellcheck source=lib/logging.sh
+source "$ZN_ROOT/lib/logging.sh"
+# shellcheck source=lib/credential.sh
+source "$ZN_ROOT/lib/credential.sh"
+# shellcheck source=protocols/interface.sh
+source "$ZN_ROOT/protocols/interface.sh"
+# shellcheck source=lib/db.sh
+source "$ZN_ROOT/lib/db.sh"
+
+zn_state_init
+cred_init
+proto_load_all
+db_init 2>/dev/null || true
+
+cmd="${1:-watchdog}"
+shift 2>/dev/null || true
+
+case "$cmd" in
+  watchdog)
+    source "$ZN_ROOT/lib/watchdog.sh"
+    watchdog_loop "${1:-60}"
+    ;;
+  api)
+    source "$ZN_ROOT/lib/api.sh"
+    api_serve "${1:-8080}" "${2:-127.0.0.1}"
+    ;;
+  sub)
+    source "$ZN_ROOT/lib/api.sh"
+    api_serve_sub "${1:-8081}"
+    ;;
+  handle)
+    source "$ZN_ROOT/lib/api.sh"
+    api_handle_request
+    ;;
+  sub-handle)
+    source "$ZN_ROOT/lib/api.sh"
+    api_sub_handle
+    ;;
+  serve)
+    # Docker 容器前台监督模式
+    source "$ZN_ROOT/lib/container.sh"
+    container_supervise
+    ;;
+  *)
+    zn_yellow "用法: zn-daemon watchdog [s] | api [port] [bind] | sub [port] | handle | sub-handle | serve"
+    ;;
+esac

@@ -1,0 +1,83 @@
+openapi: 3.0.3
+info:
+  title: ZeroNode Local API
+  version: 0.1.0
+  description: 管理面默认仅监听 127.0.0.1；订阅端点需显式开启。所有端点除 /health /status 外需 Bearer Token。
+servers:
+  - url: http://127.0.0.1:8080
+paths:
+  /health:
+    get:
+      summary: 服务健康
+      responses:
+        '200':
+          description: ok
+  /status:
+    get:
+      summary: 节点与协议状态
+      responses:
+        '200':
+          description: JSON
+  /protocols:
+    get:
+      summary: 已安装协议
+      responses:
+        '200':
+          description: JSON
+  /links:
+    get:
+      summary: 订阅内容（plain/clash/singbox）
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [plain, clash, singbox]
+      responses:
+        '200':
+          description: 订阅内容
+  /logs:
+    get:
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lines
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 脱敏日志
+  /rotate/{proto}:
+    post:
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: proto
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: rotated
+  /restart/{proto}:
+    post:
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: proto
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: restarted
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer

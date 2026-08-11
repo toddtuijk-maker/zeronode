@@ -1,0 +1,22 @@
+# ZeroNode 本地运行/测试产物（仓库不应包含）
+*.log
+*.pid
+*.tmp
+*.bak
+*.enc
+*.tar
+*.zip
+__pycache__/
+.pytest_cache/
+
+# 本地状态目录（生产环境位于 /var/lib/zeronode，不进入仓库）
+/state/
+/backups/
+/logs/
+manifest.sha256
+
+# 编辑器/系统
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

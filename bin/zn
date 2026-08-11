@@ -1,0 +1,264 @@
+#!/usr/bin/env bash
+#
+# zn - ZeroNode CLI 管理入口
+#
+
+export ZN_ROOT="${ZN_ROOT:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)}"
+export ZN_STATE="${ZN_STATE:-/var/lib/zeronode}"
+
+# shellcheck source=lib/common.sh
+source "$ZN_ROOT/lib/common.sh"
+# shellcheck source=lib/logging.sh
+source "$ZN_ROOT/lib/logging.sh"
+# shellcheck source=lib/credential.sh
+source "$ZN_ROOT/lib/credential.sh"
+# shellcheck source=lib/db.sh
+source "$ZN_ROOT/lib/db.sh"
+# shellcheck source=protocols/interface.sh
+source "$ZN_ROOT/protocols/interface.sh"
+
+zn_state_init
+cred_init
+proto_load_all
+zn_integrity_check >/dev/null 2>&1 || true
+db_init 2>/dev/null || true
+zn_log_rotate
+
+cmd_status(){
+  local proto
+  for proto in $ZN_PROTOCOLS; do
+    if proto_installed "$proto" 2>/dev/null; then
+      printf '%-12s %s (v%s)\n' "$proto" "$(proto_dispatch status "$proto")" "$(proto_dispatch version "$proto")"
+    fi
+  done
+}
+
+cmd_restart(){
+  local target="${1:-all}"
+  if [[ "$target" == "all" ]]; then
+    local proto
+    for proto in $ZN_PROTOCOLS; do
+      proto_installed "$proto" 2>/dev/null && proto_dispatch restart "$proto"
+    done
+  else
+    proto_load "$target"
+    proto_dispatch restart "$target"
+  fi
+}
+
+cmd_stop(){
+  local target="${1:-all}"
+  if [[ "$target" == "all" ]]; then
+    local proto
+    for proto in $ZN_PROTOCOLS; do
+      proto_installed "$proto" 2>/dev/null && systemctl stop "$(proto_meta "$proto" systemd_unit)" 2>/dev/null || true
+    done
+  else
+    proto_load "$target"
+    systemctl stop "$(proto_meta "$target" systemd_unit)" 2>/dev/null || true
+  fi
+}
+
+cmd_remove(){
+  local target="$1"
+  proto_load "$target"
+  proto_dispatch remove "$target"
+}
+
+cmd_env(){
+  source "$ZN_ROOT/lib/envcheck.sh"
+  source "$ZN_ROOT/lib/policy.sh"
+  envcheck_run "${1:-security}"
+}
+
+cmd_config(){
+  local action="$1" proto="$2" ver="${3:-}"
+  source "$ZN_ROOT/lib/config_manager.sh"
+  case "$action" in
+    list)
+      cm_list "$proto"
+      ;;
+    rollback)
+      zn_require_root
+      cm_rollback "$proto" "$ver"
+      ;;
+    *)
+      zn_yellow "用法: zn config list|rollback <proto> [version]"
+      ;;
+  esac
+}
+
+cmd_rotate(){
+  local proto="$1"
+  proto_load "$proto"
+  proto_dispatch rotate "$proto"
+}
+
+cmd_revoke(){
+  local user="$1"
+  zn_require_root
+  cred_revoke_user "$user"
+  zn_yellow "已记录撤销 $user；若需从协议配置中移除用户，请手动修改配置后重启"
+}
+
+cmd_backup(){
+  source "$ZN_ROOT/lib/backup.sh"
+  backup_full "${1:-}"
+}
+
+cmd_restore(){
+  source "$ZN_ROOT/lib/backup.sh"
+  backup_restore "$1" "${2:-}"
+}
+
+cmd_upgrade(){
+  source "$ZN_ROOT/lib/update.sh"
+  update_apply "$1" "${2:-}"
+}
+
+cmd_pin(){
+  source "$ZN_ROOT/lib/update.sh"
+  update_pin "$1" "${2:-}"
+}
+
+cmd_check(){
+  source "$ZN_ROOT/lib/update.sh"
+  update_check "$1"
+}
+
+cmd_links(){
+  source "$ZN_ROOT/lib/ui.sh"
+  ui_show_links
+}
+
+cmd_logs(){
+  local n="${1:-50}"
+  tail -n "$n" "$ZN_LOG_FILE" 2>/dev/null || echo "暂无日志"
+}
+
+cmd_sub(){
+  local action="${1:-status}" port="${2:-8081}"
+  source "$ZN_ROOT/lib/api.sh"
+  case "$action" in
+    enable)
+      zn_require_root
+      api_install_sub_service "$port"
+      ;;
+    disable)
+      zn_require_root
+      systemctl stop zeronode-sub 2>/dev/null || true
+      systemctl disable zeronode-sub 2>/dev/null || true
+      zn_log_info "sub" "订阅服务已关闭"
+      ;;
+    token)
+      sub_token_generate
+      ;;
+    status)
+      systemctl is-active zeronode-sub 2>/dev/null || echo inactive
+      ;;
+    *)
+      zn_yellow "用法: zn sub enable|disable|token|status [port]"
+      ;;
+  esac
+}
+
+cmd_api(){
+  local action="${1:-status}" port="${2:-8080}"
+  source "$ZN_ROOT/lib/api.sh"
+  case "$action" in
+    install)
+      zn_require_root
+      api_install_service "$port"
+      ;;
+    token)
+      api_token_generate
+      ;;
+    status)
+      printf 'token=%s\n' "$(api_token_get)"
+      systemctl is-active zeronode-api 2>/dev/null || echo "service=inactive (可执行 zn api install)"
+      ;;
+    *)
+      zn_yellow "用法: zn api install|token|status [port]"
+      ;;
+  esac
+}
+
+cmd_watchdog(){
+  source "$ZN_ROOT/lib/watchdog.sh"
+  watchdog_status
+}
+
+cmd_stealth(){
+  local action="${1:-show}" kind="${2:-}" val="${3:-}"
+  source "$ZN_ROOT/lib/stealth.sh"
+  case "$action" in
+    set)
+      case "$kind" in
+        reality_dest|masquerade) stealth_set "$kind" "$val"; zn_yellow "$kind 已设为 $val" ;;
+        *) zn_yellow "用法: zn stealth set reality_dest|masquerade <值>" ;;
+      esac
+      ;;
+    show)
+      printf 'reality_dest = %s\n' "$(stealth_pick reality_dest)"
+      printf 'masquerade   = %s\n' "$(stealth_pick masquerade)"
+      printf 'fingerprint  = %s\n' "$(stealth_fingerprint)"
+      ;;
+    *)
+      zn_yellow "用法: zn stealth show|set reality_dest|masquerade <值>"
+      ;;
+  esac
+}
+
+cmd_help(){
+  cat <<'EOF'
+ZeroNode CLI (零号节点管理平台)
+
+用法:
+  zn status                         查看全部协议状态
+  zn restart <proto|all>            重启
+  zn stop <proto|all>               停止
+  zn remove <proto>                 卸载协议（切换内核前先卸载旧内核）
+  zn env [security|speed|compat]    环境检测报告
+  zn config list <proto>            配置版本历史
+  zn config rollback <proto> [ver]  回滚配置
+  zn rotate <proto>                 轮换凭证（UUID/密码/REALITY 密钥）
+  zn revoke <uuid>                  撤销用户
+  zn backup [口令]                  全量备份（可加密）
+  zn restore <文件> [口令]          恢复备份
+  zn check <proto>                  检查更新
+  zn upgrade <proto> [版本]         升级核心（自动备份/校验/回滚）
+  zn pin <proto> [版本]             版本锁定（不带版本=解除）
+  zn links                          显示链接/二维码/订阅
+  zn logs [N]                       最近日志
+  zn sub enable|disable|token|status [port]   订阅端点
+  zn api install|token|status [port] 管理 API
+  zn watchdog status                自愈状态
+  zn stealth show|set ...           查看/自定义伪装与目标站
+EOF
+}
+
+cmd="${1:-help}"
+shift 2>/dev/null || true
+case "$cmd" in
+  status)   cmd_status ;;
+  restart)  cmd_restart "$@" ;;
+  stop)     cmd_stop "$@" ;;
+  remove)   cmd_remove "$@" ;;
+  env)      cmd_env "$@" ;;
+  config)   cmd_config "$@" ;;
+  rotate)   cmd_rotate "$@" ;;
+  revoke)   cmd_revoke "$@" ;;
+  backup)   cmd_backup "$@" ;;
+  restore)  cmd_restore "$@" ;;
+  check)    cmd_check "$@" ;;
+  upgrade)  cmd_upgrade "$@" ;;
+  pin)      cmd_pin "$@" ;;
+  links)    cmd_links ;;
+  logs)     cmd_logs "$@" ;;
+  sub)      cmd_sub "$@" ;;
+  api)      cmd_api "$@" ;;
+  watchdog) cmd_watchdog "$@" ;;
+  stealth)  cmd_stealth "$@" ;;
+  help|-h|--help) cmd_help ;;
+  *) zn_yellow "未知命令: $cmd"; cmd_help ;;
+esac
