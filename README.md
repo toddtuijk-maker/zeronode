@@ -44,7 +44,12 @@ VLESS/REALITY/Trojan 家族支持两种服务端内核，**默认推荐 sing-box
 wget -N https://raw.githubusercontent.com/toddtuijk-maker/zeronode/main/install.sh && bash install.sh
 ```
 
-> `install.sh` 会自动把程序安装到 `/opt/zeronode`，并提供 `zn` 命令。若你 fork 本项目，请把上面的仓库地址换成你自己的。
+> 单文件即可安装：脚本会自动从仓库拉取完整组件（lib/protocols/vendor 等）、做结构与语法校验后安装到 `/opt/zeronode`，并提供 `zn` 命令。若你 fork 了本项目，请设置环境变量后运行：
+>
+> ```bash
+> export ZN_REPO_URL=https://github.com/<你的账号>/zeronode
+> wget -N https://raw.githubusercontent.com/<你的账号>/zeronode/main/install.sh && bash install.sh
+> ```
 
 安装后进入菜单：
 

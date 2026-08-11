@@ -3,20 +3,94 @@
 # ZeroNode 一键安装入口（零号节点管理平台）
 # 作者频道: 零号协议 @linghaoxieyi
 #
+# 支持两种方式：
+#   1) 单文件模式：wget install.sh && bash install.sh（自动从仓库拉取完整组件并校验）
+#   2) 完整仓库模式：在克隆/解压的项目目录内执行（直接安装到 /opt/zeronode）
+#
 
-export ZN_ROOT="${ZN_ROOT:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)}"
+set -euo pipefail
 
-# ---------- 自安装到 /opt/zeronode ----------
-if [[ "$ZN_ROOT" != "/opt/zeronode" ]]; then
-  if [[ "$(id -u)" -ne 0 ]]; then
-    echo "需要 root 权限运行安装"
-    exit 1
+export ZN_ROOT="${ZN_ROOT:-/opt/zeronode}"
+export ZN_REPO_URL="${ZN_REPO_URL:-https://github.com/toddtuijk-maker/zeronode}"
+export ZN_BRANCH="${ZN_BRANCH:-main}"
+
+SOURCE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+
+# ---------- 引导：判断是完整项目目录还是单文件 ----------
+zn_has_full_tree(){
+  [[ -f "$SOURCE_DIR/lib/common.sh" ]] \
+    && [[ -f "$SOURCE_DIR/protocols/interface.sh" ]] \
+    && [[ -f "$SOURCE_DIR/bin/zn" ]] \
+    && [[ -f "$SOURCE_DIR/protocols/hysteria2.sh" ]]
+}
+
+# 只复制项目文件（绝不整目录拷贝，避免把 /root 下的 .ssh 等无关内容带进去）
+zn_install_tree(){
+  local src="$1" dst="$2" f
+  mkdir -p "$dst"
+  for f in install.sh README.md LICENSE CHANGELOG.md .gitignore; do
+    [[ -f "$src/$f" ]] && cp -a "$src/$f" "$dst/"
+  done
+  for d in bin lib protocols vendor docs tests docker api; do
+    [[ -d "$src/$d" ]] && cp -a "$src/$d" "$dst/"
+  done
+  [[ -d "$src/.github" ]] && cp -a "$src/.github" "$dst/"
+  chmod +x "$dst/install.sh" "$dst/bin/zn" "$dst/bin/zn-daemon" 2>/dev/null || true
+  # 完整性自检：关键文件必须存在
+  for f in lib/common.sh lib/logging.sh lib/db.sh protocols/interface.sh \
+           protocols/hysteria2.sh protocols/singbox.sh protocols/xray.sh bin/zn bin/zn-daemon; do
+    [[ -f "$dst/$f" ]] || { echo "错误: 安装文件缺失 $dst/$f"; return 1; }
+  done
+  # 关键脚本语法校验
+  for f in install.sh lib/common.sh protocols/interface.sh; do
+    bash -n "$dst/$f" || { echo "错误: $dst/$f 语法校验失败"; return 1; }
+  done
+  return 0
+}
+
+# 单文件模式：从 GitHub 下载仓库归档并校验结构
+zn_bootstrap_download(){
+  local tmp url extracted running_sh extracted_sh
+  echo "检测到单文件安装模式，正在从 $ZN_REPO_URL (branch: $ZN_BRANCH) 获取完整组件 ..."
+  tmp="$(mktemp -d)"
+  url="${ZN_REPO_URL%/}/archive/refs/heads/$ZN_BRANCH.tar.gz"
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL --retry 3 -m 180 "$url" -o "$tmp/repo.tar.gz" || { echo "错误: 下载失败 $url"; exit 1; }
+  elif command -v wget >/dev/null 2>&1; then
+    wget -qO "$tmp/repo.tar.gz" "$url" || { echo "错误: 下载失败 $url"; exit 1; }
+  else
+    echo "错误: 需要 curl 或 wget"; exit 1
   fi
-  mkdir -p /opt/zeronode
-  cp -a "$ZN_ROOT"/. /opt/zeronode/
-  chmod +x /opt/zeronode/install.sh /opt/zeronode/bin/zn /opt/zeronode/bin/zn-daemon
-  ln -sf /opt/zeronode/bin/zn /usr/local/bin/zn
-  exec env ZN_ROOT=/opt/zeronode bash /opt/zeronode/install.sh "$@"
+  tar -xzf "$tmp/repo.tar.gz" -C "$tmp" || { echo "错误: 归档解压失败"; exit 1; }
+  extracted="$(find "$tmp" -maxdepth 1 -type d -name 'zeronode-*' | head -1)"
+  [[ -n "$extracted" && -f "$extracted/install.sh" ]] || { echo "错误: 下载内容结构异常"; exit 1; }
+
+  # 校验：仓库内 install.sh 与当前运行版本一致性（有差异说明有新提交，以仓库为准）
+  running_sh="$(sha256sum "${BASH_SOURCE[0]}" | awk '{print $1}')"
+  extracted_sh="$(sha256sum "$extracted/install.sh" | awk '{print $1}')"
+  if [[ "$running_sh" != "$extracted_sh" ]]; then
+    echo "警告: 仓库中的 install.sh 与当前运行版本不一致（可能刚有新提交），将以仓库版本继续"
+  fi
+  bash -n "$extracted/install.sh" || { echo "错误: 下载的安装脚本语法校验失败"; exit 1; }
+  zn_install_tree "$extracted" "$ZN_ROOT" || exit 1
+  rm -rf "$tmp"
+}
+
+# ---------- 安装到 /opt/zeronode ----------
+if [[ "$(id -u)" -ne 0 ]]; then
+  echo "需要 root 权限运行安装"
+  exit 1
+fi
+
+if [[ "$SOURCE_DIR" != "$ZN_ROOT" ]]; then
+  if zn_has_full_tree; then
+    echo "检测到完整项目目录，正在安装到 $ZN_ROOT ..."
+    zn_install_tree "$SOURCE_DIR" "$ZN_ROOT" || exit 1
+  else
+    zn_bootstrap_download
+  fi
+  ln -sf "$ZN_ROOT/bin/zn" /usr/local/bin/zn
+  exec env ZN_ROOT="$ZN_ROOT" bash "$ZN_ROOT/install.sh" "$@"
 fi
 
 export ZN_STATE="${ZN_STATE:-/var/lib/zeronode}"

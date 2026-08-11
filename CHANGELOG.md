@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.0.1 (2026-08-12)
+
+### 修复
+
+- **一键安装单文件模式失效**：`wget install.sh && bash install.sh` 之前只会下载单个文件，旧引导逻辑误将当前目录（如 `/root`）整体拷贝到 `/opt/zeronode` 导致缺文件报错；现在单文件模式会自动从仓库拉取完整组件、校验结构与语法后再安装。
+- **整目录拷贝安全隐患**：修复前 `cp -a <当前目录>/. /opt/zeronode/` 可能把用户目录中的 `.ssh`、`.bash_history` 等无关内容一并拷贝；现在只拷贝项目白名单文件（install.sh/bin/lib/protocols/vendor/docs/tests/docker/api/.github 等）。
+- 支持 fork 仓库：`export ZN_REPO_URL=https://github.com/<账号>/zeronode` 后安装。
+
 ## v1.0.0 (2026-08-11)
 
 首个正式版，基于 flame1ce/hysteria2-install 全量重构为多协议节点管理平台。
