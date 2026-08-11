@@ -49,10 +49,21 @@ proto_status_hysteria2(){
 proto_health_hysteria2(){
   # shellcheck source=lib/system.sh
   source "$ZN_ROOT/lib/system.sh"
-  system_service_active "$HY2_UNIT" || return 1
+  if ! system_service_active "$HY2_UNIT"; then
+    zn_log_error "hysteria2" "健康检查失败: 服务未运行"
+    systemctl status hysteria-server --no-pager -l 2>/dev/null | tail -n 8 || true
+    return 1
+  fi
   local port
   port="$(cred_get hysteria2.port)"
-  [[ -n "$port" ]] && zn_port_in_use_udp "$port" || return 1
+  if [[ -z "$port" ]]; then
+    zn_log_error "hysteria2" "健康检查失败: 未读取到端口配置"
+    return 1
+  fi
+  if ! zn_port_in_use_udp "$port"; then
+    zn_log_error "hysteria2" "健康检查失败: 端口 $port/udp 未检测到监听"
+    return 1
+  fi
   return 0
 }
 

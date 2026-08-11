@@ -189,11 +189,32 @@ zn_json_escape(){
 
 # ---------- 端口占用检测 ----------
 zn_port_in_use_udp(){
-  ss -tunlp 2>/dev/null | awk '{print $5}' | sed 's/.*://' | grep -qx "$1"
+  local p="$1" hex
+  if command -v ss >/dev/null 2>&1; then
+    ss -tunlp 2>/dev/null | awk '{print $5}' | sed 's/.*://' | grep -qx "$p"
+    return $?
+  fi
+  if command -v netstat >/dev/null 2>&1; then
+    netstat -ulnp 2>/dev/null | awk '{print $4}' | sed 's/.*://' | grep -qx "$p"
+    return $?
+  fi
+  # 最后手段：解析 /proc/net/udp(+udp6)，端口为小端十六进制
+  hex="$(printf '%02X%02X' $((p & 255)) $((p >> 8)))"
+  grep -qi ":$hex " /proc/net/udp 2>/dev/null || grep -qi ":$hex " /proc/net/udp6 2>/dev/null
 }
 
 zn_port_in_use_tcp(){
-  ss -tlnp 2>/dev/null | awk '{print $4}' | sed 's/.*://' | grep -qx "$1"
+  local p="$1" hex
+  if command -v ss >/dev/null 2>&1; then
+    ss -tlnp 2>/dev/null | awk '{print $4}' | sed 's/.*://' | grep -qx "$p"
+    return $?
+  fi
+  if command -v netstat >/dev/null 2>&1; then
+    netstat -tlnp 2>/dev/null | awk '{print $4}' | sed 's/.*://' | grep -qx "$p"
+    return $?
+  fi
+  hex="$(printf '%02X%02X' $((p & 255)) $((p >> 8)))"
+  grep -qi ":$hex " /proc/net/tcp 2>/dev/null || grep -qi ":$hex " /proc/net/tcp6 2>/dev/null
 }
 
 # ---------- 公网 IP 检测（HTTPS 多源，可被 WARP 干扰时由调用方处理） ----------

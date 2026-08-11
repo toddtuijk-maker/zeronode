@@ -21,6 +21,7 @@ system_pkg_name(){
       case "$generic" in
         sqlite3) echo sqlite ;;
         cron)    echo cronie ;;
+        iproute2) echo iproute ;;
         *)       echo "$generic" ;;
       esac
       ;;

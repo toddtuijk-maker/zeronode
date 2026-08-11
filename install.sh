@@ -126,7 +126,7 @@ zn_log_rotate
 # 先刷新软件源，避免新系统 apt 列表缺失导致装依赖失败
 source "$ZN_ROOT/lib/system.sh"
 system_update
-for c in curl openssl sqlite3 qrencode socat; do
+for c in curl openssl sqlite3 qrencode socat iproute2; do
   zn_need_cmd_or_install "$c" "$c"
 done
 

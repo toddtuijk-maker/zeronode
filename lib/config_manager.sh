@@ -91,6 +91,9 @@ cm_apply(){
 
   if [[ $? -ne 0 ]]; then
     zn_log_error "config" "$proto 健康检查失败，自动回滚"
+    zn_log_error "config" "$proto 最近日志:"
+    journalctl -u "$(proto_meta "$proto" systemd_unit)" -n 20 --no-pager 2>/dev/null | tail -n 20 || true
+    zn_log_error "config" "$proto 监听状态: $(ss -tunlp 2>/dev/null | head -n 8 | tr '\n' ' ' || true)"
     if [[ -n "$backup_dir" && -f "$backup_dir/config" ]]; then
       cp -a "$backup_dir/config" "$cfg"
       if [[ "$(type -t "$restarter")" == "function" ]]; then

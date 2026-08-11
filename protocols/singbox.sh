@@ -52,12 +52,19 @@ proto_status_singbox(){
 proto_health_singbox(){
   # shellcheck source=lib/system.sh
   source "$ZN_ROOT/lib/system.sh"
-  system_service_active "$SB_UNIT" || return 1
+  if ! system_service_active "$SB_UNIT"; then
+    zn_log_error "singbox" "健康检查失败: 服务未运行"
+    systemctl status sing-box --no-pager -l 2>/dev/null | tail -n 8 || true
+    return 1
+  fi
   local port p
   for p in vision xhttp trojan; do
     port="$(cred_get "xray.$p.port")"
     if [[ -n "$port" ]]; then
-      zn_port_in_use_tcp "$port" || return 1
+      if ! zn_port_in_use_tcp "$port"; then
+        zn_log_error "singbox" "健康检查失败: $p 端口 $port/tcp 未检测到监听"
+        return 1
+      fi
     fi
   done
   return 0
