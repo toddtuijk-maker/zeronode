@@ -28,6 +28,10 @@ zn_has_full_tree(){
 zn_install_tree(){
   local src="$1" dst="$2" f
   mkdir -p "$dst"
+  # 清理旧的项目子目录（仅限已知目录，避免残留脏文件）
+  for d in bin lib protocols vendor docs tests docker api .github; do
+    [[ -e "$dst/$d" ]] && rm -rf "$dst/$d"
+  done
   for f in install.sh README.md LICENSE CHANGELOG.md .gitignore; do
     [[ -f "$src/$f" ]] && cp -a "$src/$f" "$dst/"
   done
